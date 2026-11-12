@@ -54,18 +54,21 @@ function run(fn, ...args) {
     google.script.run
       .withSuccessHandler(ok)
       .withFailureHandler(e => {
-        if (String(e).includes('AKSES')) localStorage.removeItem('k');
+        if (String(e).includes('AKSES')) {
+          localStorage.removeItem('k');
+          alert('Kode akses salah. Masukkan ulang.');
+          KEY = prompt('Kode akses:');
+          localStorage.setItem('k', KEY);
+        }
         err(e);
       })[fn](KEY, ...args);
   });
 }
-const g = id => document.getElementById(id).value;
-const esc = s => String(s ?? '').replace(/[&<>"]/g, c =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function tab(id) {
   document.querySelectorAll('.tab').forEach(s => s.classList.toggle('on', s.id === id));
-  ({ harian: initHarian, lapor: initLapor, pm: loadPM, wo: loadWO, kpi: loadKPI })[id]();
+  const fn = ({ harian: initHarian, lapor: initLapor, pm: loadPM, wo: loadWO, kpi: loadKPI })[id];
+  fn().catch(e => alert('Gagal memuat: ' + (e.message || e)));
 }
 
 async function loadMesinOpsi() {
@@ -77,9 +80,12 @@ async function loadMesinOpsi() {
 
 async function initHarian() {
   await loadMesinOpsi();
-  g('h_tgl') || 0;
   document.getElementById('h_tgl').value = new Date().toISOString().slice(0, 10);
   CL = await run('getChecklist');
+  if (!CL || CL.length === 0) {
+    alert('Checklist kosong. Periksa CHECKLIST di Code.gs.');
+    return;
+  }
   document.getElementById('h_items').innerHTML = CL.map((c, i) => `
     <div class="card">${esc(c)}<br>
       <label><input type="radio" name="c${i}" value="OK" checked> OK</label>
