@@ -9,7 +9,8 @@
   body{font-family:Arial,sans-serif;background:#F3F4F6;margin:0;padding:12px;font-size:15px;color:#14181F}
   h1{font-size:17px;margin:4px 0 10px}
   nav{display:flex;gap:6px;overflow-x:auto;margin-bottom:10px}
-  nav button{padding:10px 14px;border:0;border-radius:8px;background:#1D4E89;color:#fff;font-size:14px;font-weight:bold;white-space:nowrap}
+  nav button{padding:10px 14px;border:0;border-radius:8px;background:#1D4E89;color:#fff;font-size:14px;font-weight:bold;white-space:nowrap;opacity:.75}
+  nav button.on{background:#F59E0B;color:#14181F;opacity:1;box-shadow:0 2px 6px #0004}
   .tab{display:none}.tab.on{display:block}
   .card{background:#fff;border-radius:12px;padding:12px;margin:8px 0;box-shadow:0 1px 3px #0002}
   .bad{color:#B91C1C;font-weight:bold}
@@ -29,12 +30,12 @@
 <body>
 <h1>MAINTENANCE STP LAWANG</h1>
 <nav>
-  <button onclick="tab('mesin')">Mesin</button>
-  <button onclick="tab('harian')">Harian</button>
-  <button onclick="tab('lapor')">Lapor</button>
-  <button onclick="tab('pm')">Jadwal PM</button>
-  <button onclick="tab('wo')">WO</button>
-  <button onclick="tab('kpi')">KPI</button>
+  <button id="nav_mesin" onclick="tab('mesin')">Mesin</button>
+  <button id="nav_harian" onclick="tab('harian')">Harian</button>
+  <button id="nav_lapor" onclick="tab('lapor')">Lapor</button>
+  <button id="nav_pm" onclick="tab('pm')">Jadwal PM</button>
+  <button id="nav_wo" onclick="tab('wo')">WO</button>
+  <button id="nav_kpi" onclick="tab('kpi')">KPI</button>
   <button class="btn o" onclick="localStorage.removeItem('mt_k');location.reload()">Keluar / Ganti Kode</button>
 </nav>
 
@@ -142,10 +143,10 @@ function galat(boxId, e) { $(boxId).innerHTML = '<div class="card bad">❌ ' + e
 
 function tab(id) {
   document.querySelectorAll('.tab').forEach(s => s.classList.toggle('on', s.id === id));
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.id === 'nav_' + id));
   const fn = { mesin: initMesin, harian: initHarian, lapor: initLapor, pm: loadPM, wo: loadWO, kpi: loadKPI }[id];
   fn().catch(e => alert('Gagal: ' + (e.message || e)));
 }
-function goTab(id) { tab(id); }
 
 /* ====== KOSONGKAN FORM ====== */
 
@@ -346,6 +347,68 @@ function pilihPart(id, i) {
   PART_PILIH[id][i] = { kode: sel.value, nama: opt.getAttribute('data-nama') || '' };
 }
 
+async function simpanPartWO(id) {
+  const w = WOMAP[id] || {};
+  const list = PART_PILIH[id] || [];
+  const items = [];
+  list.forEach((p, i) => {
+    if (!p || !p.nama) return;
+    items.push({ kode: p.kode, nama: p.nama, qty: $('pq_' + id + '_' + i).value, satuan: $('ps_' + id + '_' + i).value });
+  });
+  if (!items.length) { alert('Pilih minimal satu sparepart'); return; }
+  try {
+    const r = await api('simpanSparepart', {}, {
+      id_wo: id, id_mesin: w.id_mesin, teknisi: $('t_' + id).value.trim(), items: items
+    });
+    alert('Sparepart tersimpan (' + r.jumlah + ' item)');
+    PART_PILIH[id] = [];
+    $('pbox_' + id).innerHTML = '';
+  } catch (e) { alert('Gagal: ' + e.message); }
+}
+
+// Ubah "2026-11-13 09:21" menjadi "13-11-2026 09:21"
+function tglJam(s) {
+  const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}:\d{2})/);
+  return m ? (m[3] + '-' + m[2] + '-' + m[1] + ' ' + m[4]) : (s || '-');
+}
+
+async function loadWO() {
+  await loadMasterPart();
+  const list = await api('woList');
+  if (!list.length) { $('wo_list').innerHTML = '<div class="card">Belum ada WO.</div>'; return; }
+  $('wo_list').innerHTML = list.map(w => {
+    WOMAP[w.id_wo] = w;
+    const id = esc(w.id_wo);
+    const waktu =
+      '<div style="font-size:13px;color:#5B6472;margin-top:4px">' +
+      'Dibuat: <b>' + esc(tglJam(w.tanggal_buat)) + '</b><br>' +
+      'Mulai: ' + esc(tglJam(w.waktu_mulai)) + '<br>' +
+      'Selesai: ' + esc(tglJam(w.waktu_selesai)) +
+      '</div>';
+    const info = '<b>' + id + '</b> <span class="badge">' + esc(w.tipe) + '</span><br>' +
+      'Mesin ' + esc(w.id_mesin) + ' · urgensi ' + esc(w.urgensi) + ' · <span class="badge ' + esc(w.status) + '">' + esc(w.status) + '</span><br>' +
+      'Gejala: ' + esc(w.gejala) + waktu;
+    if (w.status === 'Selesai') {
+      return '<div class="card" style="opacity:.7">' + info + '<br>Teknisi: ' + esc(w.teknisi) +
+        '<br>Penyebab: ' + esc(w.penyebab) + '<br>Tindakan: ' + esc(w.tindakan) +
+        '<br>Spare part: ' + esc(w.spare_part) + '<br>Durasi: ' + esc(w.durasi_menit) + ' menit<br><i>WO selesai, terkunci.</i></div>';
+    }
+        return '<div class="card" id="card_' + id + '">' + info +
+      '<label>Status</label><select id="s_' + id + '">' +
+      ['Baru','Ditugaskan','Dikerjakan','Menunggu Spare Part','Uji Jalan','Selesai']
+        .map(s => '<option' + (s === w.status ? ' selected' : '') + '>' + s + '</option>').join('') +
+      '</select>' +
+      '<label>Teknisi</label><input id="t_' + id + '" value="' + esc(w.teknisi) + '">' +
+      '<label>Penyebab</label><input id="p_' + id + '" value="' + esc(w.penyebab) + '">' +
+      '<label>Tindakan</label><input id="a_' + id + '" value="' + esc(w.tindakan) + '">' +
+      '<label>Spare part (ringkasan)</label><input id="sp_' + id + '" value="' + esc(w.spare_part) + '">' +
+      '<div class="hr"></div><b>Sparepart dipakai</b><div id="pbox_' + id + '"></div>' +
+      '<button class="btn" onclick="tambahBarisPart(\'' + id + '\')">+ Tambah sparepart</button>' +
+      '<button class="btn" onclick="simpanPartWO(\'' + id + '\')">SIMPAN SPAREPART</button>' +
+      '<button class="btn g" onclick="simpanWO(\'' + id + '\')">SIMPAN PERUBAHAN</button>' +
+      '<div id="box_' + id + '"></div></div>';
+  }).join('');
+}
 async function simpanWO(id) {
   const w = WOMAP[id] || {};
   const d = {
@@ -385,56 +448,6 @@ function kirimSelesai(id) {
   const card = $('card_' + id);
   if (card) card.remove();
   delete SELESAI_TEKS[id];
-}
-
-async function loadWO() {
-  await loadMasterPart();
-  const list = await api('woList');
-  if (!list.length) { $('wo_list').innerHTML = '<div class="card">Belum ada WO.</div>'; return; }
-  $('wo_list').innerHTML = list.map(w => {
-    WOMAP[w.id_wo] = w;
-    const id = esc(w.id_wo);
-    const info = '<b>' + id + '</b> <span class="badge">' + esc(w.tipe) + '</span><br>' +
-      'Mesin ' + esc(w.id_mesin) + ' · urgensi ' + esc(w.urgensi) + ' · <span class="badge ' + esc(w.status) + '">' + esc(w.status) + '</span><br>' +
-      'Gejala: ' + esc(w.gejala);
-    if (w.status === 'Selesai') {
-      return '<div class="card" style="opacity:.7">' + info + '<br>Teknisi: ' + esc(w.teknisi) +
-        '<br>Penyebab: ' + esc(w.penyebab) + '<br>Tindakan: ' + esc(w.tindakan) +
-        '<br>Spare part: ' + esc(w.spare_part) + '<br>Durasi: ' + esc(w.durasi_menit) + ' menit<br><i>WO selesai, terkunci.</i></div>';
-    }
-        return '<div class="card" id="card_' + id + '">' + info +
-      '<label>Status</label><select id="s_' + id + '">' +
-      ['Baru','Ditugaskan','Dikerjakan','Menunggu Spare Part','Uji Jalan','Selesai']
-        .map(s => '<option' + (s === w.status ? ' selected' : '') + '>' + s + '</option>').join('') +
-      '</select>' +
-      '<label>Teknisi</label><input id="t_' + id + '" value="' + esc(w.teknisi) + '">' +
-      '<label>Penyebab</label><input id="p_' + id + '" value="' + esc(w.penyebab) + '">' +
-      '<label>Tindakan</label><input id="a_' + id + '" value="' + esc(w.tindakan) + '">' +
-      '<label>Spare part (ringkasan)</label><input id="sp_' + id + '" value="' + esc(w.spare_part) + '">' +
-      '<div class="hr"></div><b>Sparepart dipakai</b><div id="pbox_' + id + '"></div>' +
-      '<button class="btn" onclick="tambahBarisPart(\'' + id + '\')">+ Tambah sparepart</button>' +
-      '<button class="btn" onclick="simpanPartWO(\'' + id + '\')">SIMPAN SPAREPART</button>' +
-      '<button class="btn g" onclick="simpanWO(\'' + id + '\')">SIMPAN PERUBAHAN</button>' +
-      '<div id="box_' + id + '"></div></div>';
-  }).join('');
-}
-
-async function simpanWO(id) {
-  const w = WOMAP[id] || {};
-  const d = {
-    status: $('s_' + id).value, teknisi: $('t_' + id).value.trim(),
-    penyebab: $('p_' + id).value.trim(), tindakan: $('a_' + id).value.trim(),
-    spare_part: $('sp_' + id).value.trim()
-  };
-  try {
-    const r = await api('updateWO', { id: id }, d);
-    let teks = '🔧 UPDATE WO\nWO: ' + id + '\nMesin: ' + (w.id_mesin || '-') +
-      '\nStatus: ' + r.statusLama + ' → ' + d.status + '\nTeknisi: ' + (d.teknisi || '-');
-    if (d.penyebab) teks += '\nPenyebab: ' + d.penyebab;
-    if (d.tindakan) teks += '\nTindakan: ' + d.tindakan;
-    if (d.spare_part) teks += '\nSpare part: ' + d.spare_part;
-    hasil('box_' + id, teks);
-  } catch (e) { galat('box_' + id, e); }
 }
 
 /* ====== KPI ====== */
