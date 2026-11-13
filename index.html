@@ -17,6 +17,7 @@
   label{font-size:12px;color:#5B6472;font-weight:bold;text-transform:uppercase}
   .btn{display:block;width:100%;padding:12px;margin-top:8px;border:0;border-radius:8px;background:#1D4E89;color:#fff;font-size:15px;font-weight:bold}
   .btn.g{background:#157F3C}
+  .btn.o{background:#fff;color:#1D4E89;border:1px solid #1D4E89}
   .wa-btn{background:#25D366}
   .badge{font-size:12px;padding:2px 8px;border-radius:10px;background:#DBEAFE}
   .Open,.Baru{background:#FEF3C7}.Dikerjakan{background:#DBEAFE}.Ditutup,.Selesai{background:#DCFCE7}
@@ -47,6 +48,7 @@
     <label style="margin-top:10px">atau ketik ID mesin</label>
     <input id="m_id" placeholder="contoh: M01">
     <button class="btn" onclick="cariManual()">CARI</button>
+    <button class="btn o" onclick="kosongMesin()">Kosongkan Form</button>
   </div>
   <div id="mesin_box"></div>
 </section>
@@ -59,6 +61,7 @@
     <label>Tanggal</label><input id="h_tgl" type="date">
     <div id="h_items"></div>
     <button class="btn g" onclick="kirimHarian()">SIMPAN CHECKLIST</button>
+    <button class="btn o" onclick="kosongHarian()">Kosongkan Form</button>
   </div>
   <div id="h_box"></div>
 </section>
@@ -73,6 +76,7 @@
     <select id="l_urgensi"><option>Rendah</option><option>Sedang</option><option>Tinggi</option></select>
     <label><input type="checkbox" id="l_berhenti" style="width:auto"> Mesin berhenti</label>
     <button class="btn g" onclick="kirimLapor()">SIMPAN & BUAT WO</button>
+    <button class="btn o" onclick="kosongLapor()">Kosongkan Form</button>
   </div>
   <div id="l_box"></div>
 </section>
@@ -140,6 +144,38 @@ function tab(id) {
   fn().catch(e => alert('Gagal: ' + (e.message || e)));
 }
 function goTab(id) { tab(id); }
+
+/* ====== KOSONGKAN FORM ====== */
+
+function kosongMesin() {
+  $('teknisi').value = localStorage.getItem('mt_tek') || '';
+  $('m_id').value = '';
+  PILIH = '';
+  $('mesin_box').innerHTML = '';
+  scanStop();
+}
+
+function kosongHarian() {
+  $('h_op').value = '';
+  $('h_tgl').value = hariIni();
+  $('h_mesin').selectedIndex = 0;
+  CHECK.forEach((c, i) => {
+    document.querySelector('input[name=c' + i + '][value="OK"]').checked = true;
+    $('cat' + i).value = '';
+  });
+  $('h_box').innerHTML = '';
+}
+
+function kosongLapor() {
+  $('l_pelapor').value = '';
+  $('l_gejala').value = '';
+  $('l_urgensi').selectedIndex = 0;
+  $('l_berhenti').checked = false;
+  $('l_mesin').selectedIndex = 0;
+  $('l_box').innerHTML = '';
+}
+
+/* ====== DATA ====== */
 
 async function loadMesinList() {
   if (!MESIN_LIST.length) MESIN_LIST = await api('mesinList');
@@ -212,7 +248,7 @@ function renderMesin(m, wo) {
     '<button class="btn" onclick="goTab(\'lapor\')">LAPOR KERUSAKAN</button>';
 }
 
-/* ====== HARIAN (checklist dari sheet Template_Checklist) ====== */
+/* ====== HARIAN ====== */
 
 async function initHarian() {
   await loadMesinList();
@@ -289,7 +325,6 @@ function opsiPart() {
       '" data-satuan="' + esc(p.satuan) + '">' + esc(p.nama) + '</option>').join('');
 }
 
-// Satu kotak per WO. Tiap WO punya daftar sparepart sendiri.
 function tambahBarisPart(id) {
   PART_PILIH[id] = PART_PILIH[id] || [];
   const i = PART_PILIH[id].length;
