@@ -9,7 +9,8 @@
   body{font-family:Arial,sans-serif;background:#F3F4F6;margin:0;padding:12px;font-size:15px;color:#14181F}
   h1{font-size:17px;margin:4px 0 10px}
   nav{display:flex;gap:6px;overflow-x:auto;margin-bottom:10px}
-  nav button{padding:10px 14px;border:0;border-radius:8px;background:#1D4E89;color:#fff;font-size:14px;font-weight:bold;white-space:nowrap}
+  nav button{padding:10px 14px;border:0;border-radius:8px;background:#1D4E89;color:#fff;font-size:14px;font-weight:bold;white-space:nowrap;opacity:.75}
+  nav button.on{background:#F59E0B;color:#14181F;opacity:1;box-shadow:0 2px 6px #0004}
   .tab{display:none}.tab.on{display:block}
   .card{background:#fff;border-radius:12px;padding:12px;margin:8px 0;box-shadow:0 1px 3px #0002}
   .bad{color:#B91C1C;font-weight:bold}
@@ -29,12 +30,12 @@
 <body>
 <h1>MAINTENANCE STP</h1>
 <nav>
-  <button onclick="tab('mesin')">Mesin</button>
-  <button onclick="tab('harian')">Harian</button>
-  <button onclick="tab('lapor')">Lapor</button>
-  <button onclick="tab('pm')">Jadwal PM</button>
-  <button onclick="tab('wo')">WO</button>
-  <button onclick="tab('kpi')">KPI</button>
+  <button id="nav_mesin" onclick="tab('mesin')">Mesin</button>
+  <button id="nav_harian" onclick="tab('harian')">Harian</button>
+  <button id="nav_lapor" onclick="tab('lapor')">Lapor</button>
+  <button id="nav_pm" onclick="tab('pm')">Jadwal PM</button>
+  <button id="nav_wo" onclick="tab('wo')">WO</button>
+  <button id="nav_kpi" onclick="tab('kpi')">KPI</button>
   <button class="btn o" onclick="localStorage.removeItem('mt_k');location.reload()">Keluar / Ganti Kode</button>
 </nav>
 
@@ -141,10 +142,10 @@ function galat(boxId, e) { $(boxId).innerHTML = '<div class="card bad">❌ ' + e
 
 function tab(id) {
   document.querySelectorAll('.tab').forEach(s => s.classList.toggle('on', s.id === id));
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.id === 'nav_' + id));
   const fn = { mesin: initMesin, harian: initHarian, lapor: initLapor, pm: loadPM, wo: loadWO, kpi: loadKPI }[id];
   fn().catch(e => alert('Gagal: ' + (e.message || e)));
 }
-function goTab(id) { tab(id); }
 
 /* ====== KOSONGKAN FORM ====== */
 
