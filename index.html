@@ -36,6 +36,7 @@
   <button id="nav_pm" onclick="tab('pm')">Jadwal PM</button>
   <button id="nav_wo" onclick="tab('wo')">WO</button>
   <button id="nav_kpi" onclick="tab('kpi')">KPI</button>
+  <button id="nav_masuk" onclick="tab('masuk')">Sparepart Masuk</button>
   <button class="btn o" onclick="localStorage.removeItem('mt_k');location.reload()">Keluar / Ganti Kode</button>
 </nav>
 
@@ -95,6 +96,25 @@
 <!-- KPI -->
 <section id="kpi" class="tab"><div id="kpi_box"></div></section>
 
+<!-- SPAREPART MASUK -->
+<section id="masuk" class="tab">
+  <div class="card">
+    <label>Tanggal</label><input id="sm_tgl" type="date">
+    <label>Nomor surat jalan</label><input id="sm_sj" placeholder="contoh: sj/26/11/005">
+    <label>No PO</label><input id="sm_po" placeholder="No PO (opsional)">
+    <label>No polisi</label><input id="sm_pol" placeholder="contoh: S 1234 AB">
+    <label>Driver</label><input id="sm_drv" placeholder="Nama driver">
+    <label>Nama supplier</label><input id="sm_sup" placeholder="Nama supplier">
+    <div class="hr"></div>
+    <b>Barang masuk</b>
+    <div id="sm_items"></div>
+    <button class="btn" onclick="tambahBarisMasuk()">+ Tambah barang</button>
+    <button class="btn g" onclick="simpanMasuk()">SIMPAN SPAREPART MASUK</button>
+    <button class="btn o" onclick="kosongMasuk()">Kosongkan Form</button>
+  </div>
+  <div id="sm_box"></div>
+</section>
+
 <script>
 const API = 'https://script.google.com/macros/s/AKfycbyFAFe34PqqQZKKxo-ivR-gG12PKxavB610HcdRjygjNRGAutB_kNrA6VbdGqbqB39o/exec';
 let KEY = localStorage.getItem('mt_k') || '';
@@ -104,6 +124,7 @@ let CHECK = [], MESIN_LIST = [], MASTER_PART = [], PILIH = '', scanner = null;
 let PART_PILIH = {};
 const WOMAP = {};
 const SELESAI_TEKS = {};
+let SM_N = 0;
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
   ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -144,7 +165,8 @@ function galat(boxId, e) { $(boxId).innerHTML = '<div class="card bad">❌ ' + e
 function tab(id) {
   document.querySelectorAll('.tab').forEach(s => s.classList.toggle('on', s.id === id));
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.id === 'nav_' + id));
-  const fn = { mesin: initMesin, harian: initHarian, lapor: initLapor, pm: loadPM, wo: loadWO, kpi: loadKPI }[id];
+  const fn = { mesin: initMesin, harian: initHarian, lapor: initLapor, pm: loadPM,
+               wo: loadWO, kpi: loadKPI, masuk: initMasuk }[id];
   fn().catch(e => alert('Gagal: ' + (e.message || e)));
 }
 
@@ -250,6 +272,7 @@ function renderMesin(m, wo) {
     '<button class="btn g" onclick="goTab(\'harian\')">CHECKLIST HARIAN</button>' +
     '<button class="btn" onclick="goTab(\'lapor\')">LAPOR KERUSAKAN</button>';
 }
+function goTab(id) { tab(id); }
 
 /* ====== HARIAN ====== */
 
@@ -393,7 +416,7 @@ async function loadWO() {
         '<br>Penyebab: ' + esc(w.penyebab) + '<br>Tindakan: ' + esc(w.tindakan) +
         '<br>Spare part: ' + esc(w.spare_part) + '<br>Durasi: ' + esc(w.durasi_menit) + ' menit<br><i>WO selesai, terkunci.</i></div>';
     }
-        return '<div class="card" id="card_' + id + '">' + info +
+    return '<div class="card" id="card_' + id + '">' + info +
       '<label>Status</label><select id="s_' + id + '">' +
       ['Baru','Ditugaskan','Dikerjakan','Menunggu Spare Part','Uji Jalan','Selesai']
         .map(s => '<option' + (s === w.status ? ' selected' : '') + '>' + s + '</option>').join('') +
@@ -409,6 +432,7 @@ async function loadWO() {
       '<div id="box_' + id + '"></div></div>';
   }).join('');
 }
+
 async function simpanWO(id) {
   const w = WOMAP[id] || {};
   const d = {
@@ -459,6 +483,69 @@ async function loadKPI() {
     'WO selesai: <b>' + k.selesai + '</b><br>' +
     'MTTR (menit): <b>' + k.mttr + '</b><br>' +
     'Rata-rata waktu respons (menit): <b>' + k.respons + '</b></div>';
+}
+
+/* ====== SPAREPART MASUK ====== */
+
+async function initMasuk() {
+  await loadMasterPart();
+  if (!$('sm_tgl').value) $('sm_tgl').value = hariIni();
+  if (!$('sm_items').children.length) tambahBarisMasuk();
+}
+
+function tambahBarisMasuk() {
+  const i = SM_N++;
+  $('sm_items').insertAdjacentHTML('beforeend',
+    '<div class="card" id="smr_' + i + '">' +
+    '<label>Nama barang</label><select id="smn_' + i + '">' + opsiPart() + '</select>' +
+    '<label>Quantity</label><input id="smq_' + i + '" type="number" min="0" step="any">' +
+    '<label>Keterangan</label><input id="smk_' + i + '" placeholder="Keterangan (opsional)">' +
+    '<button class="btn o" onclick="hapusBarisMasuk(' + i + ')">Hapus baris</button>' +
+    '</div>');
+}
+
+function hapusBarisMasuk(i) {
+  const el = $('smr_' + i);
+  if (el) el.remove();
+}
+
+async function simpanMasuk() {
+  const items = [];
+  document.querySelectorAll('#sm_items .card').forEach(card => {
+    const i = card.id.replace('smr_', '');
+    const sel = $('smn_' + i);
+    if (!sel.value) return;
+    const opt = sel.options[sel.selectedIndex];
+    items.push({
+      nama: opt.getAttribute('data-nama') || sel.value,
+      qty: $('smq_' + i).value,
+      keterangan: $('smk_' + i).value.trim()
+    });
+  });
+  if (!items.length) { alert('Pilih minimal satu barang'); return; }
+  const d = {
+    tanggal: $('sm_tgl').value, surat_jalan: $('sm_sj').value.trim(), no_po: $('sm_po').value.trim(),
+    no_polisi: $('sm_pol').value.trim(), driver: $('sm_drv').value.trim(),
+    supplier: $('sm_sup').value.trim(), items: items
+  };
+  try {
+    const r = await api('simpanSparepartMasuk', {}, d);
+    hasil('sm_box', '📦 SPAREPART MASUK\nTanggal: ' + d.tanggal + '\nSurat jalan: ' + (d.surat_jalan || '-') +
+      '\nNo PO: ' + (d.no_po || '-') + '\nSupplier: ' + (d.supplier || '-') +
+      '\nNo polisi: ' + (d.no_polisi || '-') + '\nDriver: ' + (d.driver || '-') +
+      '\n' + items.map((i, n) => (n + 1) + '. ' + i.nama + ' | Qty ' + i.qty +
+        (i.keterangan ? ' | ' + i.keterangan : '')).join('\n') +
+      '\nJumlah item: ' + r.jumlah);
+  } catch (e) { galat('sm_box', e); }
+}
+
+function kosongMasuk() {
+  ['sm_sj', 'sm_po', 'sm_pol', 'sm_drv', 'sm_sup'].forEach(id => $(id).value = '');
+  $('sm_tgl').value = hariIni();
+  $('sm_items').innerHTML = '';
+  SM_N = 0;
+  tambahBarisMasuk();
+  $('sm_box').innerHTML = '';
 }
 
 window.onload = () => { if (KEY) tab('mesin'); };
